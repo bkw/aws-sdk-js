@@ -256,6 +256,21 @@ describe 'AWS.EventListeners', ->
         expect(progress[2]).to.eql(loaded: 9, total: 12)
         expect(progress[3]).to.eql(loaded: 12, total: 12)
 
+  describe 'httpError', ->
+    it 'rewrites ENOTFOUND error to include helpful message', ->
+      helpers.mockHttpResponse
+        code: 'NetworkingError'
+        errno: 'ENOTFOUND'
+        region: 'mock-region'
+        hostname: 'svc.mock-region.example.com'
+        retryable: true
+
+      request = makeRequest()
+      request.send()
+      expect(request.response.error.code).to.equal('UnknownEndpoint')
+      expect(request.response.error.message).to.contain(
+        'This service may not be available in the `mock-region\' region.')
+
   describe 'retry', ->
     it 'retries a request with a set maximum retries', ->
       sendHandler = helpers.createSpy('send')
@@ -340,6 +355,30 @@ describe 'AWS.EventListeners', ->
         expect(response.retryCount).to.equal(1)
         expect(creds.accessKeyId).to.equal('VALIDKEY1')
         expect(creds.secretAccessKey).to.equal('VALIDSECRET1')
+
+    it 'retries an expired signature error', ->
+      helpers.mockHttpResponse 403, {}, ''
+
+      request = makeRequest()
+      request.on 'extractError', (resp) ->
+        resp.error =
+          code: 'SignatureDoesNotMatch'
+          message: 'Signature expired: 10 is now earlier than 20'
+          retryable: false
+      response = request.send()
+      expect(response.retryCount).to.equal(service.config.maxRetries)
+
+    it 'does not retry other signature errors', ->
+      helpers.mockHttpResponse 403, {}, ''
+
+      request = makeRequest()
+      request.on 'extractError', (resp) ->
+        resp.error =
+          code: 'SignatureDoesNotMatch'
+          message: 'Invalid signature'
+          retryable: false
+      response = request.send()
+      expect(response.retryCount).to.equal(0)
 
     [301, 307].forEach (code) ->
       it 'attempts to redirect on ' + code + ' responses', ->
@@ -434,9 +473,9 @@ describe 'AWS.EventListeners', ->
   describe 'terminal callback error handling', ->
     describe 'without domains', ->
       it 'emits uncaughtException', ->
-        helpers.mockHttpResponse 200, {}, []
+        helpers.mockResponse data: {}
         expect(-> (makeRequest -> invalidCode)).to.throw()
-        expect(completeHandler.calls.length).not.to.equal(0)
+        expect(completeHandler.calls.length).to.equal(1)
         expect(errorHandler.calls.length).to.equal(0)
         expect(retryHandler.calls.length).to.equal(0)
 
