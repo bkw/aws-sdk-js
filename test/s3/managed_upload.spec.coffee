@@ -39,7 +39,7 @@ describe 'AWS.S3.ManagedUpload', ->
       send Body: smallbody, ContentEncoding: 'encoding'
       expect(err).not.to.exist
       expect(data.ETag).to.equal('ETAG')
-      expect(data.Location).to.equal('https://bucket.s3-mock-region.amazonaws.com/key')
+      expect(data.Location).to.equal('https://bucket.s3.mock-region.amazonaws.com/key')
       expect(helpers.operationsForRequests(reqs)).to.eql ['s3.putObject']
       expect(reqs[0].params.ContentEncoding).to.equal('encoding')
 
